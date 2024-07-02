@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Recently Played</title>
+</head>
+<body>
+    <h1 id="track-info">Loading...</h1>
+    <button id="authorize-button">Authorize Spotify</button>
+
+    <script>
+        const clientId = 'your_client_id.'; // Replace with actual Spotify Client ID
+        const redirectUri = 'http://127.0.0.1:3000/callback';
+        const scopes = 'user-read-recently-played';
+
+        document.getElementById('authorize-button').addEventListener('click', () => {
+            const authUrl = `https://accounts.spotify.com/authorize?response_type=code&client_id=${clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+            console.log('Opening auth URL:', authUrl);
+            window.open(authUrl, 'SpotifyAuth', 'width=500,height=600');
+        });
+
+        async function fetchRecentlyPlayed(accessToken) {
+            console.log('Fetching recently played with access token:', accessToken);
+            const response = await fetch('https://api.spotify.com/v1/me/player/recently-played?limit=1', {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            });
+
+            const data = await response.json();
+            console.log('Recently played data:', data);
+            if (data.items && data.items.length > 0) {
+                return data.items[0].track;
+            } else {
+                throw new Error('No recently played tracks found');
+            }
+        }
+
+        function displayTrack(track) {
+            console.log('Displaying track:', track);
+            const trackInfo = document.getElementById('track-info');
+            trackInfo.textContent = `Recently played: ${track.name} by ${track.artists.map(artist => artist.name).join(', ')}`;
+        }
+
+        async function updateRecentlyPlayed() {
+            try {
+                const accessToken = localStorage.getItem('access_token');
+                if (!accessToken) {
+                    console.error('Access token is missing');
+                    document.getElementById('track-info').textContent = 'Authorization required. Please click the button to authorize Spotify.';
+                    return;
+                }
+                console.log('Access token found, updating recently played track.');
+                const track = await fetchRecentlyPlayed(accessToken);
+                displayTrack(track);
+            } catch (error) {
+                console.error('Failed to fetch recently played track:', error);
+                document.getElementById('track-info').textContent = 'Failed to fetch recently played track. Please try again.';
+            }
+        }
+
+        setInterval(updateRecentlyPlayed, 10 * 60 * 1000); // Fetch every 10 minutes
+
+        // Initial fetch if access token is already available
+        document.addEventListener('DOMContentLoaded', () => {
+            const accessToken = localStorage.getItem('access_token');
+            if (accessToken) {
+                console.log('Access token found in localStorage:', accessToken);
+                updateRecentlyPlayed();
+            } else {
+                console.log('No access token found in localStorage');
+            }
+        });
+
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'access_token') {
+                console.log('Access token updated in localStorage:', event.newValue);
+                updateRecentlyPlayed();
+            }
+        });
+
+        // Make updateRecentlyPlayed globally accessible
+        window.updateRecentlyPlayed = updateRecentlyPlayed;
+    </script>
+</body>
+</html>
